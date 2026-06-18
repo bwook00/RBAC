@@ -1,5 +1,7 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto"
 import { Database } from "bun:sqlite"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
+import { mkdirSync } from "node:fs"
+import { dirname } from "node:path"
 import type { CallerContext } from "@runbear/rbac-memory"
 
 export type Capability = "runtime" | "management"
@@ -71,8 +73,12 @@ export class RbacDirectory {
   readonly db: Database
 
   constructor(dbPath: string) {
+    // bun:sqlite does not create parent directories, so ensure they exist for
+    // a file-backed database (skip the special in-memory path used in tests).
+    if (dbPath !== ":memory:") {
+      mkdirSync(dirname(dbPath), { recursive: true })
+    }
     this.db = new Database(dbPath)
-    this.db.run("PRAGMA journal_mode = WAL")
     this.#migrate()
   }
 
@@ -92,6 +98,11 @@ export class RbacDirectory {
       [organization.id, organization.name, organization.domain],
     )
     return { ...organization }
+  }
+
+  deleteOrganization(id: string): boolean {
+    const result = this.db.run("DELETE FROM organizations WHERE id = ?", [id])
+    return result.changes > 0
   }
 
   users(): DirectoryUser[] {
@@ -182,7 +193,11 @@ export class RbacDirectory {
     return result.changes > 0
   }
 
-  issueToken(label: string, caller: CallerContext, now: number): IssuedApiToken {
+  issueToken(
+    label: string,
+    caller: CallerContext,
+    now: number,
+  ): IssuedApiToken {
     const token = `${TOKEN_PREFIX}${randomBytes(24).toString("hex")}`
     const tokenHash = hashToken(token)
     this.db.run(
@@ -218,6 +233,23 @@ export class RbacDirectory {
       .map(rowToTokenInfo)
   }
 
+  listTokensForPrincipal(principalId: string): ApiTokenInfo[] {
+    return this.db
+      .query<TokenRow, [string]>(
+        "SELECT token_hash, label, principal_id, role_ids, capabilities, organization_ids, created_at, last_used_at FROM api_tokens WHERE principal_id = ? ORDER BY created_at DESC",
+      )
+      .all(principalId)
+      .map(rowToTokenInfo)
+  }
+
+  deleteTokenForPrincipal(tokenHash: string, principalId: string): boolean {
+    const result = this.db.run(
+      "DELETE FROM api_tokens WHERE token_hash = ? AND principal_id = ?",
+      [tokenHash, principalId],
+    )
+    return result.changes > 0
+  }
+
   resolveToken(token: string, now: number): CallerContext | undefined {
     const row = this.db
       .query<TokenRow, [string]>(
@@ -240,10 +272,9 @@ export class RbacDirectory {
   }
 
   deleteToken(tokenHash: string): boolean {
-    const result = this.db.run(
-      "DELETE FROM api_tokens WHERE token_hash = ?",
-      [tokenHash],
-    )
+    const result = this.db.run("DELETE FROM api_tokens WHERE token_hash = ?", [
+      tokenHash,
+    ])
     return result.changes > 0
   }
 

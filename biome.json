@@ -18,6 +18,7 @@
       "!!**/next-env.d.ts",
       "!!**/tsconfig.tsbuildinfo",
       "!!**/node_modules",
+      "!!**/.data",
       "!!**/.cursor",
       "!!**/.idea",
       "!!**/.vscode",

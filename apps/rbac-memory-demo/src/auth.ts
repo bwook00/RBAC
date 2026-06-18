@@ -1,7 +1,13 @@
 import { createHash, randomBytes } from "node:crypto"
 import type { CallerContext } from "@runbear/rbac-memory"
 import { callerFromUser } from "./demo-state.js"
-import type { RbacDirectory } from "./rbac-db.js"
+import type { DirectoryUser, Organization, RbacDirectory } from "./rbac-db.js"
+
+export type SignupInput = {
+  email: string
+  displayName?: string
+  organizationIds?: string[]
+}
 
 export const SESSION_COOKIE = "rbm_session"
 const BEARER_PREFIX = "Bearer "
@@ -38,7 +44,10 @@ type ResolvedEndpoints = {
 export class AuthService {
   readonly #env: OidcEnv | null
   #endpoints: ResolvedEndpoints | null = null
-  readonly #pending = new Map<string, { codeVerifier: string; createdAt: number }>()
+  readonly #pending = new Map<
+    string,
+    { codeVerifier: string; createdAt: number }
+  >()
 
   constructor(env: OidcEnv | null) {
     this.#env = env
@@ -48,13 +57,11 @@ export class AuthService {
     return this.#env === null ? "dev" : "oidc"
   }
 
-  async handleLogin(
-    directory: RbacDirectory,
-    request: Request,
-    now: number,
-  ): Promise<Response> {
+  async handleLogin(directory: RbacDirectory, now: number): Promise<Response> {
     if (this.#env === null) {
-      return htmlResponse(renderDevLoginPage(directory.users()))
+      return htmlResponse(
+        renderLoginPage(directory.users(), directory.organizations()),
+      )
     }
     const endpoints = await this.#resolveEndpoints(this.#env)
     const codeVerifier = base64url(randomBytes(32))
@@ -106,22 +113,47 @@ export class AuthService {
         400,
       )
     }
-    const user = directory.getUserByEmail(email)
-    if (user === undefined) {
+    // Auto-provision first-time SSO users so OAuth onboarding works without a
+    // pre-registered directory entry. New users start with runtime capability
+    // and no roles/orgs until an admin maps them.
+    const user =
+      directory.getUserByEmail(email) ?? provisionUser(directory, email)
+    const session = directory.createSession(user.id, now)
+    return redirect("/", sessionCookie(session.id))
+  }
+
+  handleSignup(
+    directory: RbacDirectory,
+    input: SignupInput,
+    now: number,
+  ): Response {
+    if (this.#env !== null) {
       return htmlResponse(
-        renderMessagePage(
-          `No directory user is registered for ${email}. Ask an admin to add you.`,
-        ),
-        403,
+        renderMessagePage("Sign-up happens through your SSO provider."),
+        400,
       )
     }
+    const email = input.email.trim()
+    if (email.length === 0) {
+      return htmlResponse(renderMessagePage("Email is required."), 400)
+    }
+    if (directory.getUserByEmail(email) !== undefined) {
+      return htmlResponse(
+        renderMessagePage(`${email} is already registered. Please sign in.`),
+        409,
+      )
+    }
+    const user = provisionUser(directory, email, {
+      displayName: input.displayName,
+      organizationIds: input.organizationIds,
+    })
     const session = directory.createSession(user.id, now)
     return redirect("/", sessionCookie(session.id))
   }
 
   handleDevLogin(
     directory: RbacDirectory,
-    userId: string,
+    identifier: string,
     now: number,
   ): Response {
     if (this.#env !== null) {
@@ -130,9 +162,17 @@ export class AuthService {
         400,
       )
     }
-    const user = directory.getUser(userId)
+    // Accept either the user id or the email so the login form can be a single
+    // email field instead of a button per directory user.
+    const user =
+      directory.getUser(identifier) ?? directory.getUserByEmail(identifier)
     if (user === undefined) {
-      return htmlResponse(renderMessagePage("Unknown user."), 404)
+      return htmlResponse(
+        renderMessagePage(
+          `No account found for "${identifier}". Sign up first.`,
+        ),
+        404,
+      )
     }
     const session = directory.createSession(user.id, now)
     return redirect("/", sessionCookie(session.id))
@@ -344,23 +384,87 @@ function htmlResponse(html: string, status = 200): Response {
   })
 }
 
-function renderDevLoginPage(
-  users: Array<{ id: string; displayName: string; email: string }>,
+function provisionUser(
+  directory: RbacDirectory,
+  email: string,
+  overrides: { displayName?: string; organizationIds?: string[] } = {},
+): DirectoryUser {
+  const normalizedEmail = email.trim().toLowerCase()
+  const localPart = normalizedEmail.split("@")[0]
+  return directory.upsertUser({
+    id: normalizedEmail,
+    email: normalizedEmail,
+    displayName:
+      overrides.displayName !== undefined && overrides.displayName.length > 0
+        ? overrides.displayName
+        : (localPart ?? normalizedEmail),
+    organizationIds: overrides.organizationIds ?? [],
+    roleIds: [],
+    capabilities: ["runtime"],
+  })
+}
+
+function renderLoginPage(
+  users: DirectoryUser[],
+  organizations: Organization[],
 ): string {
-  const rows = users
+  const adminHint = users.find((user) =>
+    user.capabilities.includes("management"),
+  )
+  const hint =
+    adminHint === undefined
+      ? ""
+      : `<p class="muted" style="margin-top:8px;font-size:12px">Demo admin: ${escapeHtml(adminHint.email)}</p>`
+  const orgOptions = organizations
     .map(
-      (user) =>
-        `<button name="userId" value="${escapeHtml(user.id)}" type="submit">${escapeHtml(user.displayName)} <small>${escapeHtml(user.email)}</small></button>`,
+      (organization) =>
+        `<option value="${escapeHtml(organization.id)}">${escapeHtml(organization.name)} (${escapeHtml(organization.id)})</option>`,
     )
     .join("")
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8" /><title>Dev login</title>
-<style>body{font-family:system-ui;max-width:480px;margin:64px auto;padding:0 16px}
-form{display:flex;flex-direction:column;gap:8px}
-button{padding:12px;border:1px solid #ccc;border-radius:8px;background:#fff;text-align:left;cursor:pointer}
-button:hover{background:#f5f5f5}small{color:#777;display:block}</style></head>
-<body><h1>Dev login</h1>
-<p>OIDC is not configured. Pick a seeded directory user to start a session.</p>
-<form method="post" action="/auth/dev-login">${rows}</form></body></html>`
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RBAC Memory — Sign in</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#172033}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#eef4ff,#f8fafc 52%,#edf7f4)}
+.wrap{width:100%;max-width:420px;padding:24px}
+.card{background:#fff;border:1px solid rgba(148,163,184,.28);border-radius:24px;padding:28px;box-shadow:0 24px 70px rgba(37,51,78,.12);margin-bottom:18px}
+h1{margin:0 0 6px;font-size:24px;letter-spacing:-.02em}
+h2{margin:0 0 14px;font-size:16px}
+p.muted{margin:0 0 18px;color:#64748b;font-size:14px}
+form{display:grid;gap:10px}
+label{display:grid;gap:6px;font-size:13px;font-weight:700;color:#475569}
+input,select{width:100%;padding:11px 12px;border:1px solid #ccd6e5;border-radius:12px;font:inherit}
+button{padding:12px;border:0;border-radius:12px;background:#172033;color:#fff;font:inherit;font-weight:800;cursor:pointer;text-align:left}
+button:hover{opacity:.92}
+.signin button{background:#eef2ff;color:#3730a3;display:flex;justify-content:space-between;align-items:center}
+.signin small{color:#64748b;font-weight:600}
+.brand-mark{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#8b5cf6,#06b6d4);color:#fff;font-weight:900;margin-bottom:14px}
+</style></head>
+<body><div class="wrap">
+  <div class="card">
+    <div class="brand-mark">RB</div>
+    <h1>RBAC Memory</h1>
+    <p class="muted">Sign in to manage organizations, members, and MCP access tokens.</p>
+    <h2>Sign in</h2>
+    <form method="post" action="/auth/dev-login">
+      <label>Email<input name="userId" type="email" placeholder="you@company.com" required /></label>
+      <button type="submit">Sign in</button>
+    </form>
+    ${hint}
+  </div>
+  <div class="card">
+    <h2>Create an account</h2>
+    <p class="muted">New here? Sign up and (optionally) join an organization.</p>
+    <form method="post" action="/auth/signup">
+      <label>Email<input name="email" type="email" placeholder="you@company.com" required /></label>
+      <label>Display name<input name="displayName" placeholder="Your name" /></label>
+      <label>Organization<select name="organizationIds"><option value="">— none —</option>${orgOptions}</select></label>
+      <button type="submit">Sign up</button>
+    </form>
+  </div>
+</div></body></html>`
 }
 
 function renderMessagePage(message: string): string {

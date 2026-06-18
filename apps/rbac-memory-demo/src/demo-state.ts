@@ -13,7 +13,6 @@ import {
   SqlitePermissionStore,
 } from "@runbear/rbac-memory"
 import {
-  type Capability,
   type DirectoryUser,
   type Organization,
   RbacDirectory,
@@ -187,12 +186,16 @@ export const DEMO_RECORDS: MemoryRecord[] = [
   },
 ]
 
-export function createDemoState(options: CreateDemoStateOptions = {}): DemoState {
+export function createDemoState(
+  options: CreateDemoStateOptions = {},
+): DemoState {
   const backendId = options.backendId ?? "fs"
   const fsRootDir =
     options.fsRootDir ?? Bun.env.RBAC_MEMORY_FS_ROOT ?? ".data/rbac-memory-demo"
-  const dbPath =
-    options.dbPath ?? Bun.env.RBAC_DB_PATH ?? `${fsRootDir}/rbac.sqlite`
+  // The SQLite file MUST live outside `fsRootDir`: `resetBackend` clears the FS
+  // memory store by deleting that directory, which would invalidate an open
+  // database handle inside it (SQLITE_IOERR_VNODE on the next query).
+  const dbPath = options.dbPath ?? Bun.env.RBAC_DB_PATH ?? `${fsRootDir}.sqlite`
 
   const directory = new RbacDirectory(dbPath)
   const permissionStore = new SqlitePermissionStore(directory.db)

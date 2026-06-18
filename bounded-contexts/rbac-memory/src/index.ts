@@ -1,4 +1,3 @@
-// biome-ignore lint/performance/noBarrelFile: This is the public package entrypoint.
 export {
   DeterministicExternalMemoryClient,
   type ExternalMemoryClient,
@@ -19,13 +18,13 @@ export {
 } from "./permissions.js"
 export { PolicyEvaluator } from "./policy-evaluator.js"
 export { type AuditSink, RbacMemory, RbacMemoryError } from "./rbac-memory.js"
-export { SqlitePermissionStore } from "./sqlite-permission-store.js"
 export {
   intersectRequestedScopes,
   isScopeAllowed,
   isValidScope,
   scopeIncludes,
 } from "./scope.js"
+export { SqlitePermissionStore } from "./sqlite-permission-store.js"
 export type {
   Action,
   AdminAuditExplain,

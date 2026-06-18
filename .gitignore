@@ -1,8 +1,8 @@
 node_modules/
 *.tsbuildinfo
 
-# demo runtime data store
-apps/rbac-memory-demo/.data/
+# demo runtime data store (memory records + rbac.sqlite), any location
+.data/
 
 # editor / OS
 .DS_Store

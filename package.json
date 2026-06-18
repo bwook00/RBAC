@@ -7,7 +7,10 @@
     "bun": ">=1.3.11"
   },
   "workspaces": {
-    "packages": ["apps/*", "bounded-contexts/*"],
+    "packages": [
+      "apps/*",
+      "bounded-contexts/*"
+    ],
     "catalogs": {
       "bun": {
         "@types/bun": "1.3.14",

@@ -1,5 +1,6 @@
-import type { MemoryRecord } from "@runbear/rbac-memory"
-import { callerFromRole, type DemoState } from "./demo-state.js"
+import type { CallerContext, MemoryRecord } from "@runbear/rbac-memory"
+import { resolveBearerCaller } from "./auth.js"
+import type { DemoState } from "./demo-state.js"
 
 export type McpToolName = "memory_write" | "memory_search"
 
@@ -25,12 +26,12 @@ export type McpToolDefinition = {
 export const MCP_TOOLS: McpToolDefinition[] = [
   {
     name: "memory_write",
-    description: "Store memory using the caller role scope.",
+    description:
+      "Store memory using the scope of the authenticated bearer token.",
     inputSchema: {
       type: "object",
-      required: ["roleId", "record"],
+      required: ["record"],
       properties: {
-        roleId: { type: "string" },
         record: {
           type: "object",
           required: ["id", "scope", "content"],
@@ -45,12 +46,12 @@ export const MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: "memory_search",
-    description: "Search memory visible to the caller role scope.",
+    description:
+      "Search memory visible to the authenticated bearer token's scope.",
     inputSchema: {
       type: "object",
-      required: ["roleId", "query"],
+      required: ["query"],
       properties: {
-        roleId: { type: "string" },
         query: { type: "string" },
         requestedScopes: { type: "array", items: { type: "string" } },
       },
@@ -61,26 +62,27 @@ export const MCP_TOOLS: McpToolDefinition[] = [
 export type McpCall =
   | {
       name: "memory_write"
-      arguments: { roleId: string; record: MemoryRecord }
+      arguments: { record: MemoryRecord }
     }
   | {
       name: "memory_search"
-      arguments: { roleId: string; query: string; requestedScopes?: string[] }
+      arguments: { query: string; requestedScopes?: string[] }
     }
 
 export async function callMcpTool(
   state: DemoState,
+  caller: CallerContext,
   call: McpCall,
 ): Promise<unknown> {
   if (call.name === "memory_write") {
     return state.memory.memoryWrite({
-      caller: callerFromRole(call.arguments.roleId),
+      caller,
       record: call.arguments.record,
     })
   }
 
   return state.memory.memorySearch({
-    caller: callerFromRole(call.arguments.roleId),
+    caller,
     query: call.arguments.query,
     requestedScopes: call.arguments.requestedScopes,
     explain: "runtime",
@@ -90,8 +92,17 @@ export async function callMcpTool(
 export async function handleMcpRequest(
   state: DemoState,
   request: Request,
+  now: number,
 ): Promise<Response> {
-  const parsed = parseJsonRpcRequest(await request.json())
+  const payload = await request.json()
+
+  // JSON-RPC notifications (e.g. `notifications/initialized`) carry no `id`
+  // and expect no response body — acknowledge with 202 per the MCP handshake.
+  if (isNotificationPayload(payload)) {
+    return new Response(null, { status: 202 })
+  }
+
+  const parsed = parseJsonRpcRequest(payload)
   if (parsed === undefined) {
     return mcpResponse(null, undefined, {
       code: -32_600,
@@ -101,7 +112,7 @@ export async function handleMcpRequest(
 
   if (parsed.method === "initialize") {
     return mcpResponse(parsed.id, {
-      protocolVersion: "2025-06-18",
+      protocolVersion: requestedProtocolVersion(parsed.params),
       serverInfo: { name: "rbac-memory-demo", version: "0.0.0" },
       capabilities: { tools: {} },
     })
@@ -109,6 +120,14 @@ export async function handleMcpRequest(
 
   if (parsed.method === "tools/list") {
     return mcpResponse(parsed.id, { tools: listMcpTools() })
+  }
+
+  const caller = resolveBearerCaller(state.directory, request, now)
+  if (caller === undefined) {
+    return mcpResponse(parsed.id, undefined, {
+      code: -32_001,
+      message: "unauthorized",
+    })
   }
 
   const call = parseToolCall(parsed.params)
@@ -119,7 +138,7 @@ export async function handleMcpRequest(
     })
   }
 
-  const result = await callMcpTool(state, call)
+  const result = await callMcpTool(state, caller, call)
   return mcpResponse(parsed.id, {
     content: [{ type: "text", text: JSON.stringify(result) }],
     isError: isDeniedResult(result),
@@ -160,18 +179,16 @@ function parseToolCall(value: unknown): McpCall | undefined {
     return undefined
   }
   if (value.name === "memory_write") {
-    const roleId = value.arguments.roleId
     const record = value.arguments.record
-    if (typeof roleId !== "string" || !isMemoryRecord(record)) {
+    if (!isMemoryRecord(record)) {
       return undefined
     }
-    return { name: "memory_write", arguments: { roleId, record } }
+    return { name: "memory_write", arguments: { record } }
   }
   if (value.name === "memory_search") {
-    const roleId = value.arguments.roleId
     const query = value.arguments.query
     const requestedScopes = value.arguments.requestedScopes
-    if (typeof roleId !== "string" || typeof query !== "string") {
+    if (typeof query !== "string") {
       return undefined
     }
     if (requestedScopes !== undefined && !isStringArray(requestedScopes)) {
@@ -179,7 +196,7 @@ function parseToolCall(value: unknown): McpCall | undefined {
     }
     return {
       name: "memory_search",
-      arguments: { roleId, query, requestedScopes },
+      arguments: { query, requestedScopes },
     }
   }
   return undefined
@@ -206,6 +223,23 @@ function isJsonRpcId(value: unknown): value is JsonRpcId {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function isNotificationPayload(value: unknown): boolean {
+  return (
+    isObject(value) &&
+    typeof value.method === "string" &&
+    value.id === undefined
+  )
+}
+
+const DEFAULT_PROTOCOL_VERSION = "2025-06-18"
+
+function requestedProtocolVersion(params: unknown): string {
+  if (isObject(params) && typeof params.protocolVersion === "string") {
+    return params.protocolVersion
+  }
+  return DEFAULT_PROTOCOL_VERSION
 }
 
 function isStringArray(value: unknown): value is string[] {
