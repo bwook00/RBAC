@@ -4,6 +4,9 @@ node_modules/
 # demo runtime data store (memory records + rbac.sqlite), any location
 .data/
 
+# local env
+.env
+
 # editor / OS
 .DS_Store
 .idea/

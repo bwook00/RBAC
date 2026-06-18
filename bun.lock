@@ -10,6 +10,14 @@
         "@typescript/native-preview": "catalog:bun",
       },
     },
+    "apps/discord-rbac-dashboard": {
+      "name": "@runbear/discord-rbac-dashboard",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/bun": "catalog:bun",
+        "@typescript/native-preview": "catalog:bun",
+      },
+    },
     "apps/rbac-memory-demo": {
       "name": "@runbear/rbac-memory-demo",
       "version": "0.0.0",
@@ -53,6 +61,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.4.15", "", { "os": "win32", "cpu": "arm64" }, "sha512-ouhkYdlhp/1GghEJPdWwD/Vi3gQ1nFxuSpMolWsbq3Lsq3QUR4jl6UdhhscdCugKU5vOEuMiJhvKj66O0OCq+w=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.15", "", { "os": "win32", "cpu": "x64" }, "sha512-zBrGq5mx5wwpnow4+2BxUvleDM+GNd4sLbPaMapsSLQLD0NGRCquqPBTgN+7XkUteHvj7M+BstuI8tmnV7+HgQ=="],
+
+    "@runbear/discord-rbac-dashboard": ["@runbear/discord-rbac-dashboard@workspace:apps/discord-rbac-dashboard"],
 
     "@runbear/rbac-memory": ["@runbear/rbac-memory@workspace:bounded-contexts/rbac-memory"],
 
