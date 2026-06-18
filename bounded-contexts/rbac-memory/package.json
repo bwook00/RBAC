@@ -1,0 +1,16 @@
+{
+  "name": "@runbear/rbac-memory",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsgo --noEmit",
+    "test": "bun test src"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "catalog:bun"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "a-only",
+  "scope": "customer/acme/team/a",
+  "organizationIds": [
+    "customer/acme"
+  ],
+  "content": "shared alpha launch plan",
+  "tags": [
+    "launch",
+    "alpha",
+    "memory"
+  ],
+  "metadata": {
+    "department": "engineering",
+    "sensitivity": "team"
+  }
+}

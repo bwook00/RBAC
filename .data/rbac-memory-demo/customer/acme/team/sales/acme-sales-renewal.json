@@ -1,0 +1,17 @@
+{
+  "id": "acme-sales-renewal",
+  "scope": "customer/acme/team/sales",
+  "organizationIds": [
+    "customer/acme"
+  ],
+  "content": "Acme sales renewal playbook with enterprise pricing notes",
+  "tags": [
+    "sales",
+    "renewal",
+    "pricing"
+  ],
+  "metadata": {
+    "department": "sales",
+    "sensitivity": "team"
+  }
+}

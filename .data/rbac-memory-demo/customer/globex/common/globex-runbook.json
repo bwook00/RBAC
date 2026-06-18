@@ -1,0 +1,17 @@
+{
+  "id": "globex-runbook",
+  "scope": "customer/globex/common",
+  "organizationIds": [
+    "customer/globex"
+  ],
+  "content": "Globex operations runbook for incident response memory retrieval",
+  "tags": [
+    "runbook",
+    "operations",
+    "incident"
+  ],
+  "metadata": {
+    "department": "operations",
+    "sensitivity": "internal"
+  }
+}
