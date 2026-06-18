@@ -414,57 +414,118 @@ function renderLoginPage(
   const hint =
     adminHint === undefined
       ? ""
-      : `<p class="muted" style="margin-top:8px;font-size:12px">Demo admin: ${escapeHtml(adminHint.email)}</p>`
+      : `<p class="hint">Demo account: <button type="button" class="hint-link" data-fill="${escapeHtml(adminHint.email)}">${escapeHtml(adminHint.email)}</button></p>`
   const orgOptions = organizations
     .map(
       (organization) =>
-        `<option value="${escapeHtml(organization.id)}">${escapeHtml(organization.name)} (${escapeHtml(organization.id)})</option>`,
+        `<option value="${escapeHtml(organization.id)}">${escapeHtml(organization.name)}</option>`,
     )
     .join("")
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RBAC Memory — Sign in</title>
+<title>RBAC Memory</title>
 <style>
-:root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#172033}
+:root{--ink:#0b1220;--muted:#64748b;--line:#e2e8f0;--brand:#4f46e5;--brand-press:#4338ca;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink)}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,#eef4ff,#f8fafc 52%,#edf7f4)}
-.wrap{width:100%;max-width:420px;padding:24px}
-.card{background:#fff;border:1px solid rgba(148,163,184,.28);border-radius:24px;padding:28px;box-shadow:0 24px 70px rgba(37,51,78,.12);margin-bottom:18px}
-h1{margin:0 0 6px;font-size:24px;letter-spacing:-.02em}
-h2{margin:0 0 14px;font-size:16px}
-p.muted{margin:0 0 18px;color:#64748b;font-size:14px}
-form{display:grid;gap:10px}
-label{display:grid;gap:6px;font-size:13px;font-weight:700;color:#475569}
-input,select{width:100%;padding:11px 12px;border:1px solid #ccd6e5;border-radius:12px;font:inherit}
-button{padding:12px;border:0;border-radius:12px;background:#172033;color:#fff;font:inherit;font-weight:800;cursor:pointer;text-align:left}
-button:hover{opacity:.92}
-.signin button{background:#eef2ff;color:#3730a3;display:flex;justify-content:space-between;align-items:center}
-.signin small{color:#64748b;font-weight:600}
-.brand-mark{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#8b5cf6,#06b6d4);color:#fff;font-weight:900;margin-bottom:14px}
+html,body{height:100%}
+body{margin:0}
+.auth{display:flex;min-height:100vh}
+.brand{position:relative;flex:1.05;overflow:hidden;color:#fff;padding:48px;display:flex;flex-direction:column;justify-content:space-between;background:radial-gradient(120% 120% at 15% 0%,#6366f1 0%,#4338ca 42%,#0ea5e9 100%)}
+.brand::after{content:"";position:absolute;inset:0;background:radial-gradient(60% 60% at 85% 90%,rgba(255,255,255,.14),transparent 70%);pointer-events:none}
+.brand-top{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+.brand-mark{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.16);backdrop-filter:blur(6px);font-weight:900;letter-spacing:.02em}
+.brand-name{font-weight:800;font-size:16px}
+.brand-copy{position:relative;z-index:1;max-width:440px}
+.brand-copy h1{font-size:38px;line-height:1.1;letter-spacing:-.03em;margin:0 0 16px;font-weight:800}
+.brand-copy p{margin:0 0 28px;color:rgba(255,255,255,.82);font-size:16px;line-height:1.6}
+.feat{display:grid;gap:14px;list-style:none;padding:0;margin:0}
+.feat li{display:flex;gap:12px;align-items:flex-start;font-size:14px;color:rgba(255,255,255,.92)}
+.feat .ico{flex:0 0 22px;height:22px;border-radius:7px;display:grid;place-items:center;background:rgba(255,255,255,.18);font-size:13px;font-weight:900}
+.brand-foot{position:relative;z-index:1;color:rgba(255,255,255,.6);font-size:13px}
+.panel{flex:1;display:grid;place-items:center;padding:32px;background:#fff}
+.card{width:100%;max-width:380px}
+.card>.logo{display:none}
+.seg{display:flex;background:#f1f5f9;border-radius:12px;padding:4px;margin:0 0 24px}
+.seg button{flex:1;border:0;background:transparent;padding:9px 10px;border-radius:9px;font:inherit;font-weight:700;font-size:14px;color:var(--muted);cursor:pointer;transition:all .15s ease}
+.seg button.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.head{margin:0 0 20px}
+.head h2{margin:0 0 6px;font-size:22px;letter-spacing:-.02em}
+.head p{margin:0;color:var(--muted);font-size:14px}
+form{display:grid;gap:16px}
+.field{display:grid;gap:7px}
+.field label{font-size:13px;font-weight:600;color:#334155}
+.field input,.field select{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit;color:var(--ink);background:#fff;transition:border-color .15s,box-shadow .15s}
+.field input::placeholder{color:#94a3b8}
+.field input:focus,.field select:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.submit{margin-top:4px;width:100%;padding:12px;border:0;border-radius:10px;background:var(--brand);color:#fff;font:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:background .15s,transform .05s}
+.submit:hover{background:var(--brand-press)}
+.submit:active{transform:translateY(1px)}
+.hint{margin:18px 0 0;font-size:13px;color:var(--muted);text-align:center}
+.hint-link{border:0;background:none;color:var(--brand);font:inherit;font-weight:600;cursor:pointer;padding:0}
+.hint-link:hover{text-decoration:underline}
+.hidden{display:none}
+@media (max-width:880px){.brand{display:none}.card>.logo{display:flex;align-items:center;gap:10px;margin:0 0 24px;color:var(--ink)}.card>.logo .brand-mark{background:linear-gradient(135deg,#6366f1,#0ea5e9)}}
 </style></head>
-<body><div class="wrap">
-  <div class="card">
-    <div class="brand-mark">RB</div>
-    <h1>RBAC Memory</h1>
-    <p class="muted">Sign in to manage organizations, members, and MCP access tokens.</p>
-    <h2>Sign in</h2>
-    <form method="post" action="/auth/dev-login">
-      <label>Email<input name="userId" type="email" placeholder="you@company.com" required /></label>
-      <button type="submit">Sign in</button>
-    </form>
-    ${hint}
-  </div>
-  <div class="card">
-    <h2>Create an account</h2>
-    <p class="muted">New here? Sign up and (optionally) join an organization.</p>
-    <form method="post" action="/auth/signup">
-      <label>Email<input name="email" type="email" placeholder="you@company.com" required /></label>
-      <label>Display name<input name="displayName" placeholder="Your name" /></label>
-      <label>Organization<select name="organizationIds"><option value="">— none —</option>${orgOptions}</select></label>
-      <button type="submit">Sign up</button>
-    </form>
-  </div>
-</div></body></html>`
+<body>
+<div class="auth">
+  <aside class="brand">
+    <div class="brand-top"><div class="brand-mark">RB</div><span class="brand-name">RBAC Memory</span></div>
+    <div class="brand-copy">
+      <h1>Scoped memory for every AI agent.</h1>
+      <p>Govern exactly which memories each agent, role, and tenant can read and write — across your dashboard, HTTP API, and MCP clients.</p>
+      <ul class="feat">
+        <li><span class="ico">✓</span><span>Hierarchical scopes with per-role read/write policies</span></li>
+        <li><span class="ico">✓</span><span>Per-user MCP bearer tokens — identity, not guesswork</span></li>
+        <li><span class="ico">✓</span><span>SSO sign-in with automatic member provisioning</span></li>
+      </ul>
+    </div>
+    <div class="brand-foot">RBAC Memory · local console</div>
+  </aside>
+  <main class="panel">
+    <div class="card">
+      <div class="logo"><div class="brand-mark">RB</div><span class="brand-name">RBAC Memory</span></div>
+      <div class="seg" role="tablist">
+        <button type="button" class="active" data-mode="signin">Sign in</button>
+        <button type="button" data-mode="signup">Create account</button>
+      </div>
+
+      <section id="pane-signin">
+        <div class="head"><h2>Welcome back</h2><p>Sign in to manage organizations, members, and MCP tokens.</p></div>
+        <form method="post" action="/auth/dev-login">
+          <div class="field"><label for="si-email">Email</label><input id="si-email" name="userId" type="email" placeholder="you@company.com" autocomplete="email" required /></div>
+          <button class="submit" type="submit">Sign in</button>
+        </form>
+        ${hint}
+      </section>
+
+      <section id="pane-signup" class="hidden">
+        <div class="head"><h2>Create your account</h2><p>Sign up and optionally join an organization to get started.</p></div>
+        <form method="post" action="/auth/signup">
+          <div class="field"><label for="su-email">Email</label><input id="su-email" name="email" type="email" placeholder="you@company.com" autocomplete="email" required /></div>
+          <div class="field"><label for="su-name">Display name</label><input id="su-name" name="displayName" placeholder="Your name" autocomplete="name" /></div>
+          <div class="field"><label for="su-org">Organization <span style="color:#94a3b8;font-weight:400">(optional)</span></label><select id="su-org" name="organizationIds"><option value="">No organization</option>${orgOptions}</select></div>
+          <button class="submit" type="submit">Create account</button>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+  const seg = document.querySelector(".seg")
+  const panes = { signin: document.querySelector("#pane-signin"), signup: document.querySelector("#pane-signup") }
+  seg.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-mode]")
+    if (!btn) return
+    seg.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn))
+    panes.signin.classList.toggle("hidden", btn.dataset.mode !== "signin")
+    panes.signup.classList.toggle("hidden", btn.dataset.mode !== "signup")
+  })
+  document.addEventListener("click", (e) => {
+    const fill = e.target.closest(".hint-link")
+    if (fill) { document.querySelector("#si-email").value = fill.dataset.fill }
+  })
+</script>
+</body></html>`
 }
 
 function renderMessagePage(message: string): string {
